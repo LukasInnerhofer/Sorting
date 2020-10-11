@@ -5,7 +5,7 @@
 
 int main()
 {
-	std::vector<int> v{ 10, 1, 4 };
+	std::vector<int> v{ 111, 10, 1, 4 };
 
 	sorting::bubbleSort(v.begin(), v.end(),
 		std::function<void(decltype(v.begin()), decltype(v.end()))>(
@@ -13,8 +13,9 @@ int main()
 			{
 				for (std::vector<int>::iterator it = begin; it != end; ++it)
 				{
-					std::cout << *it << "\n";
+					std::cout << *it << ", ";
 				}
+				std::cout << "\n";
 			}));
 
 	return 0;
