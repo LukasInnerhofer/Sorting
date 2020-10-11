@@ -15,7 +15,7 @@ namespace sorting
 			done = true;
 			for (RandomIt it = begin; it != end - 1; ++it)
 			{
-				if (!comp(*it, *(it + 1)))
+				if ((!comp(*it, *(it + 1)) && (*it != *(it + 1))))
 				{
 					std::iter_swap(it, it + 1);
 					done = false;

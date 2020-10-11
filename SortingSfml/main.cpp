@@ -1,7 +1,10 @@
 #include "sorting.h"
 #include "SFML/Graphics.hpp"
 
+#include <chrono>
 #include <iostream>
+#include <mutex>
+#include <random>
 #include <vector>
 #include <thread>
 
@@ -33,15 +36,42 @@ void drawBarGraph(sf::RenderTarget& target, RandomIt begin, RandomIt end)
 
 int main()
 {
-	std::vector<int> v{ 111, 10, 1, 4 };
+	std::vector<int> v(800);
+
+	std::random_device rd;
+	std::default_random_engine randomEngine(rd());
+	std::uniform_int_distribution<int> dist(0, 600);
+
+	for (auto it = v.begin(); it != v.end(); ++it)
+	{
+		*it = dist(randomEngine);
+	}
 
 	sf::RenderWindow window;
 	window.create(sf::VideoMode(800, 600), "Sorting");
 	sf::Event e;
-	bool redraw = true;
+
+	std::atomic<bool> mainThreadLock = false, sortThreadLock = false;;
+
+	auto callback = [&](std::vector<int>::iterator, std::vector<int>::iterator) 
+	{ 
+		sortThreadLock = true;
+		while (mainThreadLock) {};
+		sortThreadLock = false;
+	};
+
+	auto sortThread = std::thread(
+		sorting::bubbleSort<std::vector<int>::iterator>,
+		v.begin(),
+		v.end(),
+		callback
+	);
+	std::thread timerThread;
 
 	while (window.isOpen())
 	{
+		timerThread = std::thread([]() { std::this_thread::sleep_for(std::chrono::milliseconds(16)); });
+
 		while (window.pollEvent(e))
 		{
 			switch (e.type)
@@ -51,16 +81,23 @@ int main()
 				break;
 			}
 		}
-
-		if (redraw)
+		
+		if (!sortThreadLock)
 		{
-			redraw = false;
+			mainThreadLock = true;
 			window.clear();
-			
+
 			drawBarGraph(window, v.cbegin(), v.cend());
+			mainThreadLock = false;
+
 			window.display();
 		}
+		
+
+		timerThread.join();
 	}
+
+	sortThread.join();
 
 	return 0;
 }
