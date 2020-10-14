@@ -4,24 +4,25 @@
 #include <functional>
 #include <mutex>
 
-constexpr auto bubbleSortDefaultComp = std::less_equal();
+constexpr auto bubbleSortDefaultComp = std::greater();
 
 namespace sorting
 {
 	template <typename RandomIt, typename Compare, bool callbackPresent>
 	void bubbleSort(RandomIt begin, RandomIt end, Compare comp, std::function<void(RandomIt begin, RandomIt end)> callback = nullptr)
 	{
-		bool done;
+		RandomIt currentEnd = end - 1;
+		RandomIt newEnd;
 
 		do
 		{
-			done = true;
-			for (RandomIt it = begin; it != end - 1; ++it)
+			newEnd = begin;
+			for (RandomIt it = begin; it != currentEnd; ++it)
 			{
-				if (!comp(*it, *(it + 1)))
+				if (comp(*it, *(it + 1)))
 				{
 					std::iter_swap(it, it + 1);
-					done = false;
+					newEnd = it;
 
 					if constexpr (callbackPresent)
 					{
@@ -29,7 +30,8 @@ namespace sorting
 					}
 				}
 			}
-		} while (!done);
+			currentEnd = newEnd;
+		} while (currentEnd > begin);
 	}
 
 	template <typename RandomIt, typename Compare>
@@ -45,7 +47,7 @@ namespace sorting
 		}
 	}
 
-	template <typename RandomIt, typename Compare, typename Mutex>
+	template <typename RandomIt, typename Mutex, typename Compare>
 	void bubbleSort(RandomIt begin, RandomIt end, Mutex& mutex, Compare comp = bubbleSortDefaultComp, std::function<void(RandomIt, RandomIt, Mutex&)> callback = nullptr)
 	{
 		mutex.lock();
