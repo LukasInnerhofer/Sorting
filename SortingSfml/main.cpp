@@ -8,6 +8,9 @@
 #include <vector>
 #include <thread>
 
+static constexpr unsigned int windowWidth = 800;
+static constexpr unsigned int windowHeight = 600;
+
 template <typename RandomIt>
 void drawBarGraph(sf::RenderTarget& target, RandomIt begin, RandomIt end)
 {
@@ -34,38 +37,13 @@ void drawBarGraph(sf::RenderTarget& target, RandomIt begin, RandomIt end)
 	}
 }
 
-int main()
+template <typename RandomIt, typename Mutex>
+void render(RandomIt begin, RandomIt end, Mutex& mutex)
 {
-	std::vector<int> v(800);
-
-	std::random_device rd;
-	std::default_random_engine randomEngine(rd());
-	std::uniform_int_distribution<int> dist(0, 600);
-
-	for (auto it = v.begin(); it != v.end(); ++it)
-	{
-		*it = dist(randomEngine);
-	}
-
 	sf::RenderWindow window;
-	window.create(sf::VideoMode(800, 600), "Sorting");
+	window.create(sf::VideoMode(windowWidth, windowHeight), "Sorting");
 	sf::Event e;
 
-	std::atomic<bool> mainThreadLock = false, sortThreadLock = false;;
-
-	auto callback = [&](std::vector<int>::iterator, std::vector<int>::iterator) 
-	{ 
-		sortThreadLock = true;
-		while (mainThreadLock) {};
-		sortThreadLock = false;
-	};
-
-	auto sortThread = std::thread(
-		sorting::bubbleSort<std::vector<int>::iterator>,
-		v.begin(),
-		v.end(),
-		callback
-	);
 	std::thread timerThread;
 
 	while (window.isOpen())
@@ -81,23 +59,65 @@ int main()
 				break;
 			}
 		}
-		
-		if (!sortThreadLock)
+
+		if (mutex.try_lock())
 		{
-			mainThreadLock = true;
 			window.clear();
 
-			drawBarGraph(window, v.cbegin(), v.cend());
-			mainThreadLock = false;
+			drawBarGraph(window, begin, end);
+			mutex.unlock();
 
 			window.display();
 		}
-		
 
 		timerThread.join();
 	}
+}
+
+int main()
+{
+	std::vector<int> collection(windowWidth);
+	using RandomIt = decltype(collection.begin());
+	std::mutex mutex;
+
+	std::random_device rd;
+	std::default_random_engine randomEngine(rd());
+	std::uniform_int_distribution<int> dist(0, windowHeight);
+
+	for (auto it = collection.begin(); it != collection.end(); ++it)
+	{
+		*it = dist(randomEngine);
+	}
+
+	void (*sort)(RandomIt, RandomIt, std::mutex&, std::function<void(RandomIt, RandomIt, std::mutex&)>) = sorting::bubbleSort;
+	auto sortThread = std::thread(
+		sort,
+		collection.begin(),
+		collection.end(),
+		std::ref(mutex),
+		[](RandomIt begin, RandomIt end, std::mutex& mutex)
+		{
+			static unsigned int counter = 0;
+
+			if (++counter == 40)
+			{
+				counter = 0;
+				mutex.unlock();
+				std::this_thread::sleep_for(std::chrono::microseconds(500));
+				mutex.lock();
+			}
+		}
+	);
+
+	auto renderThread = std::thread(
+		render<RandomIt, std::mutex>,
+		collection.begin(),
+		collection.end(),
+		std::ref(mutex)
+	);
 
 	sortThread.join();
+	renderThread.join();
 
 	return 0;
 }

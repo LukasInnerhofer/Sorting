@@ -2,6 +2,9 @@
 #define SORTING_H
 
 #include <functional>
+#include <mutex>
+
+constexpr auto bubbleSortDefaultComp = std::less_equal();
 
 namespace sorting
 {
@@ -15,7 +18,7 @@ namespace sorting
 			done = true;
 			for (RandomIt it = begin; it != end - 1; ++it)
 			{
-				if ((!comp(*it, *(it + 1)) && (*it != *(it + 1))))
+				if (!comp(*it, *(it + 1)))
 				{
 					std::iter_swap(it, it + 1);
 					done = false;
@@ -30,7 +33,7 @@ namespace sorting
 	}
 
 	template <typename RandomIt, typename Compare>
-	void bubbleSort(RandomIt begin, RandomIt end, Compare comp, std::function<void(RandomIt begin, RandomIt end)> callback = nullptr)
+	void bubbleSort(RandomIt begin, RandomIt end, Compare comp = bubbleSortDefaultComp, std::function<void(RandomIt begin, RandomIt end)> callback = nullptr)
 	{
 		if (callback)
 		{
@@ -42,10 +45,23 @@ namespace sorting
 		}
 	}
 
-	template <typename RandomIt>
-	void bubbleSort(RandomIt begin, RandomIt end, std::function<void(RandomIt begin, RandomIt end)> callback = nullptr)
+	template <typename RandomIt, typename Compare, typename Mutex>
+	void bubbleSort(RandomIt begin, RandomIt end, Mutex& mutex, Compare comp = bubbleSortDefaultComp, std::function<void(RandomIt, RandomIt, Mutex&)> callback = nullptr)
 	{
-		bubbleSort(begin, end, std::less<>(), callback);
+		mutex.lock();
+		bubbleSort(
+			begin, 
+			end, 
+			comp, 
+			std::function<void(RandomIt, RandomIt)>([&](RandomIt begin, RandomIt end) { if(callback) callback(begin, end, mutex); }
+		));
+		mutex.unlock();
+	}
+
+	template <typename RandomIt, typename Mutex>
+	void bubbleSort(RandomIt begin, RandomIt end, Mutex& mutex, std::function<void(RandomIt, RandomIt, Mutex&)> callback = nullptr)
+	{
+		bubbleSort(begin, end, mutex, bubbleSortDefaultComp, callback);
 	}
 }
 
