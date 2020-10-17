@@ -48,20 +48,19 @@ namespace sorting
 	}
 
 	template <typename RandomIt, typename Mutex, typename Compare>
-	void bubbleSort(RandomIt begin, RandomIt end, Mutex& mutex, Compare comp = bubbleSortDefaultComp, std::function<void(RandomIt, RandomIt, Mutex&)> callback = nullptr)
+	void bubbleSort(RandomIt begin, RandomIt end, Mutex& mutex, Compare comp = bubbleSortDefaultComp, std::function<void(RandomIt, RandomIt, std::unique_lock<Mutex>&)> callback = nullptr)
 	{
-		mutex.lock();
+		std::unique_lock<Mutex> lock(mutex);
 		bubbleSort(
 			begin, 
 			end, 
 			comp, 
-			std::function<void(RandomIt, RandomIt)>([&](RandomIt begin, RandomIt end) { if(callback) callback(begin, end, mutex); }
+			std::function<void(RandomIt, RandomIt)>([&](RandomIt begin, RandomIt end) { if(callback) callback(begin, end, lock); }
 		));
-		mutex.unlock();
 	}
 
 	template <typename RandomIt, typename Mutex>
-	void bubbleSort(RandomIt begin, RandomIt end, Mutex& mutex, std::function<void(RandomIt, RandomIt, Mutex&)> callback = nullptr)
+	void bubbleSort(RandomIt begin, RandomIt end, Mutex& mutex, std::function<void(RandomIt, RandomIt, std::unique_lock<Mutex>&)> callback = nullptr)
 	{
 		bubbleSort(begin, end, mutex, bubbleSortDefaultComp, callback);
 	}

@@ -38,7 +38,7 @@ void drawBarGraph(sf::RenderTarget& target, RandomIt begin, RandomIt end)
 }
 
 template <typename RandomIt, typename Mutex>
-void render(RandomIt begin, RandomIt end, Mutex& mutex)
+void render(RandomIt begin, RandomIt end, Mutex& mutex, std::condition_variable& condition)
 {
 	sf::RenderWindow window;
 	window.create(sf::VideoMode(windowWidth, windowHeight), "Sorting");
@@ -66,6 +66,7 @@ void render(RandomIt begin, RandomIt end, Mutex& mutex)
 
 			drawBarGraph(window, begin, end);
 			mutex.unlock();
+			condition.notify_one();
 
 			window.display();
 		}
@@ -76,35 +77,34 @@ void render(RandomIt begin, RandomIt end, Mutex& mutex)
 
 int main()
 {
-	std::vector<int> collection(windowWidth);
+	std::vector<int> collection(200);
 	using RandomIt = decltype(collection.begin());
 	std::mutex mutex;
+	std::condition_variable condition;
 
 	std::random_device rd;
 	std::default_random_engine randomEngine(rd());
-	std::uniform_int_distribution<int> dist(0, windowHeight);
+	std::uniform_int_distribution<int> dist(0, windowHeight / 4);
 
 	for (auto it = collection.begin(); it != collection.end(); ++it)
 	{
 		*it = dist(randomEngine);
 	}
 
-	void (*sort)(RandomIt, RandomIt, std::mutex&, std::function<void(RandomIt, RandomIt, std::mutex&)>) = sorting::bubbleSort;
+	void (*sort)(RandomIt, RandomIt, std::mutex&, std::function<void(RandomIt, RandomIt, std::unique_lock<std::mutex>&)>) = sorting::bubbleSort;
 	auto sortThread = std::thread(
 		sort,
 		collection.begin(),
 		collection.end(),
 		std::ref(mutex),
-		[](RandomIt begin, RandomIt end, std::mutex& mutex)
+		[&](RandomIt begin, RandomIt end, std::unique_lock<std::mutex>& lock)
 		{
 			static unsigned int counter = 0;
 
-			if (++counter == 40)
+			if (++counter == 2)
 			{
 				counter = 0;
-				mutex.unlock();
-				std::this_thread::sleep_for(std::chrono::microseconds(500));
-				mutex.lock();
+				condition.wait(lock);
 			}
 		}
 	);
@@ -113,7 +113,8 @@ int main()
 		render<RandomIt, std::mutex>,
 		collection.begin(),
 		collection.end(),
-		std::ref(mutex)
+		std::ref(mutex),
+		std::ref(condition)
 	);
 
 	sortThread.join();
