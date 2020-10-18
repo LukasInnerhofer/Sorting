@@ -37,8 +37,8 @@ void drawBarGraph(sf::RenderTarget& target, RandomIt begin, RandomIt end)
 	}
 }
 
-template <typename RandomIt, typename Mutex>
-void render(RandomIt begin, RandomIt end, Mutex& mutex, std::condition_variable& condition)
+template <typename Collection, typename Mutex>
+void render(Collection& collection, Mutex& mutex, std::condition_variable& condition)
 {
 	sf::RenderWindow window;
 	window.create(sf::VideoMode(windowWidth, windowHeight), "Sorting");
@@ -64,7 +64,7 @@ void render(RandomIt begin, RandomIt end, Mutex& mutex, std::condition_variable&
 		{
 			window.clear();
 
-			drawBarGraph(window, begin, end);
+			drawBarGraph(window, collection.begin(), collection.end());
 			mutex.unlock();
 			condition.notify_one();
 
@@ -75,46 +75,85 @@ void render(RandomIt begin, RandomIt end, Mutex& mutex, std::condition_variable&
 	}
 }
 
+template <typename ForwardIt, typename BaseType>
+void randomize(ForwardIt begin, ForwardIt end, BaseType lower, BaseType upper)
+{
+	std::random_device rd;
+	std::default_random_engine randomEngine(rd());
+	std::uniform_int_distribution<int> dist(lower, upper);
+
+	for (ForwardIt it = begin; it != end; ++it)
+	{
+		*it = dist(randomEngine);
+	}
+}
+
 int main()
 {
-	std::vector<int> collection(200);
+	std::vector<int> collection(windowWidth);
 	using RandomIt = decltype(collection.begin());
 	std::mutex mutex;
 	std::condition_variable condition;
 
-	std::random_device rd;
-	std::default_random_engine randomEngine(rd());
-	std::uniform_int_distribution<int> dist(0, windowHeight / 4);
+	randomize(collection.begin(), collection.end(), 0U, windowHeight);
 
-	for (auto it = collection.begin(); it != collection.end(); ++it)
-	{
-		*it = dist(randomEngine);
-	}
-
-	void (*sort)(RandomIt, RandomIt, std::mutex&, std::function<void(RandomIt, RandomIt, std::unique_lock<std::mutex>&)>) = sorting::bubbleSort;
-	auto sortThread = std::thread(
-		sort,
-		collection.begin(),
-		collection.end(),
+	auto renderThread = std::thread(
+		render<decltype(collection), std::mutex>,
+		std::ref(collection),
 		std::ref(mutex),
-		[&](RandomIt begin, RandomIt end, std::unique_lock<std::mutex>& lock)
-		{
-			static unsigned int counter = 0;
+		std::ref(condition)
+	);
 
-			if (++counter == 2)
-			{
-				counter = 0;
-				condition.wait(lock);
-			}
+	auto sortThread = std::thread(
+		[&]() 
+		{
+			std::unique_lock<std::mutex> lock(mutex);
+			sorting::quickSort<RandomIt, decltype(sorting::defaultComp), true>(
+				collection.begin(),
+				collection.end(),
+				sorting::defaultComp,
+				[&]()
+				{
+					static unsigned int counter = 0;
+
+					if (++counter >= 1)
+					{
+						counter = 0;
+						condition.wait(lock);
+					}
+				});
 		}
 	);
 
-	auto renderThread = std::thread(
-		render<RandomIt, std::mutex>,
-		collection.begin(),
-		collection.end(),
-		std::ref(mutex),
-		std::ref(condition)
+	sortThread.join();
+
+	std::this_thread::sleep_for(std::chrono::seconds(2));
+
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		collection.resize(windowWidth / 10);
+		randomize(collection.begin(), collection.end(), 0U, windowHeight);
+	}
+
+	sortThread = std::thread(
+		[&]()
+		{
+			std::unique_lock<std::mutex> lock(mutex);
+			sorting::bubbleSort<RandomIt, decltype(sorting::defaultComp), true>(
+				collection.begin(),
+				collection.end(),
+				sorting::defaultComp,
+				[&]()
+				{
+					static unsigned int counter = 0;
+
+					if (++counter >= 1)
+					{
+						counter = 0;
+						condition.wait(lock);
+					}
+				});
+		}
 	);
 
 	sortThread.join();

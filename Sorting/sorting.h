@@ -4,29 +4,29 @@
 #include <functional>
 #include <mutex>
 
-constexpr auto bubbleSortDefaultComp = std::greater();
-
 namespace sorting
 {
-	template <typename RandomIt, typename Compare, bool callbackPresent>
-	void bubbleSort(RandomIt begin, RandomIt end, Compare comp, std::function<void(RandomIt begin, RandomIt end)> callback = nullptr)
+	constexpr auto defaultComp = std::less();
+
+	template <typename ForwardIt, typename Compare = decltype(defaultComp), bool callbackPresent = false>
+	void bubbleSort(ForwardIt begin, ForwardIt end, Compare comp = defaultComp, std::function<void()> callback = nullptr)
 	{
-		RandomIt currentEnd = end - 1;
-		RandomIt newEnd;
+		ForwardIt currentEnd = end - 1;
+		ForwardIt newEnd;
 
 		do
 		{
 			newEnd = begin;
-			for (RandomIt it = begin; it != currentEnd; ++it)
+			for (ForwardIt it = begin; it != currentEnd; ++it)
 			{
-				if (comp(*it, *(it + 1)))
+				if (comp(*(it + 1), *it))
 				{
 					std::iter_swap(it, it + 1);
 					newEnd = it;
 
 					if constexpr (callbackPresent)
 					{
-						callback(begin, end);
+						callback();
 					}
 				}
 			}
@@ -34,35 +34,52 @@ namespace sorting
 		} while (currentEnd > begin);
 	}
 
-	template <typename RandomIt, typename Compare>
-	void bubbleSort(RandomIt begin, RandomIt end, Compare comp = bubbleSortDefaultComp, std::function<void(RandomIt begin, RandomIt end)> callback = nullptr)
+	template <typename RandomIt, typename Compare = decltype(defaultComp), bool callbackPresent = false>
+	void quickSortInternal(RandomIt begin, RandomIt end, Compare comp = defaultComp, std::function<void()> callback = nullptr)
 	{
-		if (callback)
+		if (begin < end)
 		{
-			bubbleSort<RandomIt, Compare, true>(begin, end, comp, callback);
-		}
-		else
-		{
-			bubbleSort<RandomIt, Compare, false>(begin, end, comp);
+			RandomIt pivotIt = begin;
+			std::advance(pivotIt, std::distance(begin, end) / 2);
+			const auto pivot = *pivotIt;
+			RandomIt asc = begin, desc = end;
+			RandomIt partition;
+
+			for (;;)
+			{
+				while (comp(*asc, pivot)) 
+				{ 
+					++asc; 
+				}
+				while (comp(pivot, *desc)) 
+				{ 
+					--desc; 
+				}
+				if (asc >= desc)
+				{
+					partition = desc;
+					break;
+				}
+				std::iter_swap(asc, desc);
+
+				if constexpr (callbackPresent)
+				{
+					callback();
+				}
+			
+				++asc;
+				--desc;
+			}
+
+			quickSortInternal<RandomIt, Compare, callbackPresent>(begin, partition, comp, callback);
+			quickSortInternal<RandomIt, Compare, callbackPresent>(partition + 1, end, comp, callback);
 		}
 	}
 
-	template <typename RandomIt, typename Mutex, typename Compare>
-	void bubbleSort(RandomIt begin, RandomIt end, Mutex& mutex, Compare comp = bubbleSortDefaultComp, std::function<void(RandomIt, RandomIt, std::unique_lock<Mutex>&)> callback = nullptr)
+	template <typename RandomIt, typename Compare = decltype(defaultComp), bool callbackPresent = false>
+		void quickSort(RandomIt begin, RandomIt end, Compare comp = defaultComp, std::function<void()> callback = nullptr)
 	{
-		std::unique_lock<Mutex> lock(mutex);
-		bubbleSort(
-			begin, 
-			end, 
-			comp, 
-			std::function<void(RandomIt, RandomIt)>([&](RandomIt begin, RandomIt end) { if(callback) callback(begin, end, lock); }
-		));
-	}
-
-	template <typename RandomIt, typename Mutex>
-	void bubbleSort(RandomIt begin, RandomIt end, Mutex& mutex, std::function<void(RandomIt, RandomIt, std::unique_lock<Mutex>&)> callback = nullptr)
-	{
-		bubbleSort(begin, end, mutex, bubbleSortDefaultComp, callback);
+		quickSortInternal<RandomIt, Compare, callbackPresent>(begin, end - 1, comp, callback);
 	}
 }
 
