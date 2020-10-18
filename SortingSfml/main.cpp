@@ -12,17 +12,28 @@ static constexpr unsigned int windowWidth = 800;
 static constexpr unsigned int windowHeight = 600;
 
 template <typename RandomIt>
-void drawBarGraph(sf::RenderTarget& target, RandomIt begin, RandomIt end)
+void drawBarGraph(sf::RenderTarget& target, RandomIt begin, RandomIt end, std::vector<std::vector<RandomIt>>& highlight)
 {
 	static sf::RectangleShape rect;
+	static const std::vector<sf::Color> highlightColors = { sf::Color::Magenta, sf::Color::Cyan, sf::Color::Yellow };
 
 	const size_t dataSize = end - begin;
 	const decltype(*(std::declval<RandomIt>())) max = *std::max_element(begin, end);
 
-	rect.setFillColor(sf::Color::White);
-
 	for (RandomIt it = begin; it != end; ++it)
 	{
+		rect.setFillColor(sf::Color::White);
+		for (size_t itHighlightClass = 0; itHighlightClass < highlight.size(); ++itHighlightClass)
+		{
+			for (size_t itHighlight = 0; itHighlight < highlight[0].size(); ++itHighlight)
+			{
+				if (it == highlight[itHighlightClass][itHighlight])
+				{
+					rect.setFillColor(highlightColors[itHighlightClass]);
+				}
+			}
+		}
+
 		rect.setSize(
 			{ 
 				static_cast<float>(target.getSize().x) / dataSize, 
@@ -38,7 +49,7 @@ void drawBarGraph(sf::RenderTarget& target, RandomIt begin, RandomIt end)
 }
 
 template <typename Collection, typename Mutex>
-void render(Collection& collection, Mutex& mutex, std::condition_variable& condition)
+void render(Collection& collection, std::vector<std::vector<decltype(std::declval<Collection>().begin())>>& highlight, Mutex& mutex, std::condition_variable& condition)
 {
 	sf::RenderWindow window;
 	window.create(sf::VideoMode(windowWidth, windowHeight), "Sorting");
@@ -64,7 +75,7 @@ void render(Collection& collection, Mutex& mutex, std::condition_variable& condi
 		{
 			window.clear();
 
-			drawBarGraph(window, collection.begin(), collection.end());
+			drawBarGraph(window, collection.begin(), collection.end(), highlight);
 			mutex.unlock();
 			condition.notify_one();
 
@@ -91,8 +102,9 @@ void randomize(ForwardIt begin, ForwardIt end, BaseType lower, BaseType upper)
 int main()
 {
 	using BaseType = int;
-	std::vector<BaseType> collection(windowWidth);
+	std::vector<BaseType> collection(windowWidth / 2);
 	using RandomIt = decltype(collection.begin());
+	std::vector<std::vector<RandomIt>> highlight;
 	std::mutex mutex;
 	std::condition_variable condition;
 
@@ -101,6 +113,7 @@ int main()
 	auto renderThread = std::thread(
 		render<decltype(collection), std::mutex>,
 		std::ref(collection),
+		std::ref(highlight),
 		std::ref(mutex),
 		std::ref(condition)
 	);
@@ -113,13 +126,13 @@ int main()
 				collection.begin(),
 				collection.end(),
 				sorting::defaultComp,
-				[&]()
+				[&](const std::vector<std::vector<RandomIt>>& cbHighlight)
 				{
 					static unsigned int counter = 0;
-
 					if (++counter >= 1)
 					{
 						counter = 0;
+						highlight = cbHighlight;
 						condition.wait(lock);
 					}
 				});
@@ -132,6 +145,7 @@ int main()
 
 	{
 		std::lock_guard<std::mutex> lock(mutex);
+		highlight.clear();
 		randomize(collection.begin(), collection.end(), 0U, windowHeight);
 	}
 
@@ -159,6 +173,7 @@ int main()
 
 	{
 		std::lock_guard<std::mutex> lock(mutex);
+		highlight.clear();
 		collection.resize(windowWidth / 10);
 		randomize(collection.begin(), collection.end(), 0U, windowHeight);
 	}
@@ -171,13 +186,13 @@ int main()
 				collection.begin(),
 				collection.end(),
 				sorting::defaultComp,
-				[&]()
+				[&](const std::vector<std::vector<RandomIt>>& cbHighlight)
 				{
 					static unsigned int counter = 0;
-
 					if (++counter >= 1)
 					{
 						counter = 0;
+						highlight = cbHighlight;
 						condition.wait(lock);
 					}
 				});

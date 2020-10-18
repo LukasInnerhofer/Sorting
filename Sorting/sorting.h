@@ -9,7 +9,7 @@ namespace sorting
 	constexpr auto defaultComp = std::less();
 
 	template <typename ForwardIt, typename Compare = decltype(defaultComp), bool callbackPresent = false>
-	void bubbleSort(ForwardIt begin, ForwardIt end, Compare comp = defaultComp, std::function<void()> callback = nullptr)
+	void bubbleSort(ForwardIt begin, ForwardIt end, Compare comp = defaultComp, std::function<void(const std::vector<std::vector<ForwardIt>>&)> callback = nullptr)
 	{
 		ForwardIt currentEnd = end - 1;
 		ForwardIt newEnd;
@@ -26,7 +26,9 @@ namespace sorting
 
 					if constexpr (callbackPresent)
 					{
-						callback();
+						static auto highlight = std::vector<std::vector<ForwardIt>>({ std::vector<ForwardIt>(1) });
+						highlight[0][0] = it + 1;
+						callback(highlight);
 					}
 				}
 			}
@@ -35,7 +37,7 @@ namespace sorting
 	}
 
 	template <typename RandomIt, typename Compare = decltype(defaultComp), bool callbackPresent = false>
-	void quickSortInternal(RandomIt begin, RandomIt end, Compare comp = defaultComp, std::function<void()> callback = nullptr)
+	void quickSortInternal(RandomIt begin, RandomIt end, Compare comp = defaultComp, std::function<void(const std::vector<std::vector<RandomIt>>&)> callback = nullptr)
 	{
 		if (begin < end)
 		{
@@ -64,7 +66,20 @@ namespace sorting
 
 				if constexpr (callbackPresent)
 				{
-					callback();
+					if (asc == pivotIt)
+					{
+						pivotIt = desc;
+					}
+					else if (desc == pivotIt)
+					{
+						pivotIt = asc;
+					}
+
+					static auto highlight = std::vector<std::vector<RandomIt>>(3, std::vector<RandomIt>(1));
+					highlight[0][0] = pivotIt;
+					highlight[1][0] = asc;
+					highlight[2][0] = desc;
+					callback(highlight);
 				}
 			
 				++asc;
@@ -77,7 +92,7 @@ namespace sorting
 	}
 
 	template <typename RandomIt, typename Compare = decltype(defaultComp), bool callbackPresent = false>
-		void quickSort(RandomIt begin, RandomIt end, Compare comp = defaultComp, std::function<void()> callback = nullptr)
+		void quickSort(RandomIt begin, RandomIt end, Compare comp = defaultComp, std::function<void(const std::vector<std::vector<RandomIt>>&)> callback = nullptr)
 	{
 		quickSortInternal<RandomIt, Compare, callbackPresent>(begin, end - 1, comp, callback);
 	}
