@@ -90,7 +90,8 @@ void randomize(ForwardIt begin, ForwardIt end, BaseType lower, BaseType upper)
 
 int main()
 {
-	std::vector<int> collection(windowWidth);
+	using BaseType = int;
+	std::vector<BaseType> collection(windowWidth);
 	using RandomIt = decltype(collection.begin());
 	std::mutex mutex;
 	std::condition_variable condition;
@@ -121,6 +122,33 @@ int main()
 						counter = 0;
 						condition.wait(lock);
 					}
+				});
+		}
+	);
+
+	sortThread.join();
+
+	std::this_thread::sleep_for(std::chrono::seconds(2));
+
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		randomize(collection.begin(), collection.end(), 0U, windowHeight);
+	}
+
+	sortThread = std::thread(
+		[&]()
+		{
+			std::unique_lock<std::mutex> lock(mutex);
+			std::sort(collection.begin(), collection.end(),
+				[&](BaseType lhs, BaseType rhs)
+				{
+					static unsigned int counter = 0;
+					if (++counter >= 4)
+					{
+						counter = 0;
+						condition.wait(lock);
+					}
+					return lhs < rhs;
 				});
 		}
 	);
