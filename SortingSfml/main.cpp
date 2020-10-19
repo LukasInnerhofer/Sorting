@@ -8,8 +8,8 @@
 #include <vector>
 #include <thread>
 
-static constexpr unsigned int windowWidth = 800;
-static constexpr unsigned int windowHeight = 600;
+static constexpr unsigned int windowWidth = 1600;
+static constexpr unsigned int windowHeight = 900;
 
 template <typename RandomIt>
 void drawBarGraph(sf::RenderTarget& target, RandomIt begin, RandomIt end, std::vector<std::vector<RandomIt>>& highlight)
@@ -163,6 +163,37 @@ int main()
 						condition.wait(lock);
 					}
 					return lhs < rhs;
+				});
+		}
+	);
+
+	sortThread.join();
+
+	std::this_thread::sleep_for(std::chrono::seconds(2));
+
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		highlight.clear();
+		randomize(collection.begin(), collection.end(), 0U, windowHeight);
+	}
+
+	sortThread = std::thread(
+		[&]()
+		{
+			std::unique_lock<std::mutex> lock(mutex);
+			sorting::selectionSort<RandomIt, decltype(sorting::defaultComp), true>(
+				collection.begin(), 
+				collection.end(),
+				sorting::defaultComp,
+				[&](const std::vector<std::vector<RandomIt>>& cbHighlight)
+				{
+					static unsigned int counter = 0;
+					if (++counter >= 1)
+					{
+						counter = 0;
+						highlight = cbHighlight;
+						condition.wait(lock);
+					}
 				});
 		}
 	);

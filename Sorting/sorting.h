@@ -92,9 +92,38 @@ namespace sorting
 	}
 
 	template <typename RandomIt, typename Compare = decltype(defaultComp), bool callbackPresent = false>
-		void quickSort(RandomIt begin, RandomIt end, Compare comp = defaultComp, std::function<void(const std::vector<std::vector<RandomIt>>&)> callback = nullptr)
+	void quickSort(RandomIt begin, RandomIt end, Compare comp = defaultComp, std::function<void(const std::vector<std::vector<RandomIt>>&)> callback = nullptr)
 	{
 		quickSortInternal<RandomIt, Compare, callbackPresent>(begin, end - 1, comp, callback);
+	}
+
+	template <typename ForwardIt, typename Compare = decltype(defaultComp), bool callbackPresent = false>
+	void selectionSort(ForwardIt begin, ForwardIt end, Compare comp = defaultComp, std::function<void(const std::vector<std::vector<ForwardIt>>&)> callback = nullptr)
+	{
+		ForwardIt itMin;
+
+		for (ForwardIt itOuter = begin; itOuter != end; ++itOuter)
+		{
+			itMin = itOuter;
+
+			for (ForwardIt itInner = itOuter; itInner != end; ++itInner)
+			{
+				if (comp(*itInner, *itMin))
+				{
+					itMin = itInner;
+				}
+			}
+
+			std::iter_swap(itOuter, itMin);
+
+			if constexpr (callbackPresent)
+			{
+				static std::vector<std::vector<ForwardIt>> highlight(1, std::vector<ForwardIt>(2));
+				highlight[0][0] = itOuter;
+				highlight[0][1] = itMin;
+				callback(highlight);
+			}
+		}
 	}
 }
 
